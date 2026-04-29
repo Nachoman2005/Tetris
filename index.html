@@ -134,8 +134,8 @@ body::before {
 .over-title { font-family:'Special Elite',serif; font-size:clamp(2rem,8vw,3rem); color:var(--red-bright); text-shadow:0 0 30px #FF0000,2px 2px 0 #000; letter-spacing:4px; animation:flicker 2s infinite; }
 @keyframes flicker { 0%,100%{opacity:1}92%{opacity:1}93%{opacity:0.4}94%{opacity:1}96%{opacity:0.6}97%{opacity:1} }
 .over-stats { background:#0d0000; border:1px solid #3a0000; padding:16px clamp(16px,6vw,32px); min-width:min(240px,85vw); }
-.over-row   { display:flex; justify-content:space-between; align-items:center; gap:24px; padding:6px 0; border-bottom:1px solid #1a0000; }
-.over-row:last-child { border-bottom:none; }
+.over-stats .over-row   { display:flex; justify-content:space-between; align-items:center; gap:24px; padding:6px 0; border-bottom:1px solid #1a0000; }
+.over-stats .over-row:last-child { border-bottom:none; }
 .over-label { color:var(--red-bright); font-size:0.7rem; letter-spacing:2px; }
 .over-val   { color:var(--gold); font-weight:700; font-size:1.05rem; }
 .over-tetris-big { font-size:clamp(2rem,8vw,2.5rem); font-weight:700; color:var(--gold); text-shadow:0 0 15px #FFD700; }
@@ -145,7 +145,6 @@ body::before {
 
 <div id="tetris-flash"><div class="flash-text">ТЕТРИС!</div></div>
 
-<!-- ═══ MENU ═══ -->
 <div id="screen-menu" class="screen active">
   <div class="menu-emblem">☭</div>
   <div class="menu-title">ТЕТРИС</div>
@@ -163,10 +162,8 @@ body::before {
   </div>
 </div>
 
-<!-- ═══ GAME ═══ -->
 <div id="screen-game" class="screen">
 
-  <!-- PORTRAIT ROOT -->
   <div id="portrait-root">
     <div class="game-header">
       <span style="color:var(--red-bright)">☭</span>
@@ -175,7 +172,6 @@ body::before {
     </div>
 
     <div class="game-layout">
-      <!-- LEFT -->
       <div class="side-panel" id="sp-left">
         <div class="stat-box">
           <div class="stat-label">Nivel</div>
@@ -191,14 +187,12 @@ body::before {
         </div>
       </div>
 
-      <!-- BOARD -->
       <div id="canvas-wrapper">
         <canvas id="tetris"></canvas>
         <div id="line-flash"></div>
         <div id="pause-overlay" onclick="togglePause()">PAUSA<small>Toca para continuar</small></div>
       </div>
 
-      <!-- RIGHT -->
       <div class="side-panel" id="sp-right">
         <div class="stat-box">
           <div class="stat-label">Siguiente</div>
@@ -230,7 +224,6 @@ body::before {
     </div>
   </div>
 
-  <!-- LANDSCAPE ROOT -->
   <div id="landscape-root">
     <div class="ls-board-col">
       <div id="ls-canvas-wrapper" style="position:relative;border:3px solid var(--red);box-shadow:0 0 0 1px #6a0000,0 0 20px #8B000055;">
@@ -262,7 +255,6 @@ body::before {
 
 </div>
 
-<!-- ═══ GAME OVER ═══ -->
 <div id="screen-over" class="screen">
   <div class="over-title">ИГРА ОКОНЧЕНА</div>
   <div style="font-size:0.72rem;letter-spacing:3px;color:var(--gold-dim);margin-bottom:6px;">GAME OVER</div>
@@ -305,97 +297,56 @@ function isLandscape() {
 }
 
 // ════════════════════════════════════════
-// CANVASES  (two physical canvases, one active)
+// CANVASES
 // ════════════════════════════════════════
-const cvP  = document.getElementById('tetris');       // portrait
-const cvL  = document.getElementById('tetris-ls');    // landscape
+const cvP  = document.getElementById('tetris');       
+const cvL  = document.getElementById('tetris-ls');    
 const ncP  = document.getElementById('next-canvas');
 const ncL  = document.getElementById('next-canvas-ls');
 
 let ctx, nextCtx, nextCvs;
 let BLOCK = 20;
 
-function getActiveCanvases() {
-  if (isLandscape()) return { main: cvL, next: ncL };
-  return { main: cvP, next: ncP };
-}
-
 function computeSizes() {
   const ls = isLandscape();
   const vw = window.innerWidth, vh = window.innerHeight;
 
-  // Show/hide roots
   document.getElementById('portrait-root').style.display  = ls ? 'none' : 'flex';
   document.getElementById('landscape-root').style.display = ls ? 'flex' : 'none';
 
   if (ls) {
-    // ── LANDSCAPE ──
-    // board height = full vh minus tiny margin
     const boardH = vh - 10;
     BLOCK = Math.floor(boardH / ROWS);
     const boardW = BLOCK * COLS;
-
     cvL.width  = boardW; cvL.height = boardH;
     cvL.style.width = boardW+'px'; cvL.style.height = boardH+'px';
-
-    // side col width
     const sideW = Math.min(140, vw - boardW - 24);
     document.querySelector('.ls-side-col').style.width = sideW+'px';
     document.querySelector('.ls-side-col').style.height = vh+'px';
-
-    // next canvas
     const nSz = Math.min(sideW - 10, Math.floor(BLOCK * 4.5));
     ncL.width = nSz; ncL.height = nSz;
-
-    ctx     = cvL.getContext('2d');
+    ctx = cvL.getContext('2d');
     nextCtx = ncL.getContext('2d');
     nextCvs = ncL;
-
   } else {
-    // ── PORTRAIT ──
-    // Estimate control height & other fixed heights
-    const ctrlH   = Math.max(58 + 48 + 8 + 8 + 8, Math.floor(vh * 0.23));
-    const headerH = 36;
-    const levelH  = 34;
-    const hintH   = 16;
-    const padH    = 8;
-
+    const ctrlH = Math.max(122, Math.floor(vh * 0.23));
+    const headerH = 36, levelH = 34, hintH = 16, padH = 8;
     const availH = vh - headerH - levelH - hintH - ctrlH - padH;
-
-    // Side panel width based on available space
-    let sidePW = Math.min(80, Math.floor(vw * 0.19));
-    sidePW = Math.max(56, sidePW);
-
-    const availW = vw - sidePW * 2 - 8 * 2 - 6; // 6 = borders
+    let sidePW = Math.max(56, Math.min(80, Math.floor(vw * 0.19)));
+    const availW = vw - sidePW * 2 - 22;
     BLOCK = Math.floor(Math.min(availH / ROWS, availW / COLS));
     BLOCK = Math.max(12, Math.min(BLOCK, 28));
-
     const boardW = BLOCK * COLS, boardH = BLOCK * ROWS;
     cvP.width = boardW; cvP.height = boardH;
     cvP.style.width = boardW+'px'; cvP.style.height = boardH+'px';
-
-    // Side panels
-    ['sp-left','sp-right'].forEach(id => {
-      const el = document.getElementById(id);
-      el.style.width = sidePW+'px';
-    });
-    // stat label font size
-    document.querySelectorAll('.stat-label').forEach(el => { el.style.fontSize = sidePW < 65 ? '0.44rem' : '0.52rem'; });
-    // stat value
-    document.querySelectorAll('.side-panel .stat-value').forEach(el => { el.style.fontSize = sidePW < 65 ? '0.9rem' : '1.05rem'; });
-
-    // level bar
+    ['sp-left','sp-right'].forEach(id => document.getElementById(id).style.width = sidePW+'px');
     document.getElementById('p-bar-track').style.width = boardW+'px';
-
-    // next canvas
     const nSz = Math.min(sidePW - 8, 64);
     ncP.width = nSz; ncP.height = nSz;
-
-    ctx     = cvP.getContext('2d');
+    ctx = cvP.getContext('2d');
     nextCtx = ncP.getContext('2d');
     nextCvs = ncP;
   }
-
   if (typeof drawNext === 'function' && nextPiece) drawNext();
   if (typeof draw === 'function' && arena) draw();
 }
@@ -408,9 +359,6 @@ let score, level, lines, tetrisCount;
 let dropCounter, dropInterval, lastTime;
 let running, paused, animId;
 
-// ════════════════════════════════════════
-// SCREENS
-// ════════════════════════════════════════
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -424,10 +372,14 @@ function startGame() {
   paused = false;
   document.getElementById('pause-overlay').classList.remove('visible');
   document.getElementById('pause-overlay-ls').style.display = 'none';
+  
   nextPiece = randPiece();
   showScreen('screen-game');
+  
+  // CORRECCIÓN: Resetear jugador ANTES de calcular tamaños/dibujar
+  playerReset(); 
   computeSizes();
-  playerReset();
+  
   updateHUD();
   cancelAnimationFrame(animId);
   running = true;
@@ -443,9 +395,6 @@ function endGame() {
   setTimeout(() => showScreen('screen-over'), 450);
 }
 
-// ════════════════════════════════════════
-// PIECES
-// ════════════════════════════════════════
 function randPiece() {
   const k = PKEYS[Math.random() * PKEYS.length | 0];
   return { matrix: PDEFS[k].map(r => [...r]) };
@@ -465,9 +414,6 @@ function rotMatrix(m, dir) {
   if (dir > 0) m.forEach(r => r.reverse()); else m.reverse();
 }
 
-// ════════════════════════════════════════
-// PLAYER
-// ════════════════════════════════════════
 function playerReset() {
   player = { matrix: nextPiece.matrix, pos: { x: (COLS/2|0) - (nextPiece.matrix[0].length/2|0), y: 0 } };
   nextPiece = randPiece();
@@ -501,9 +447,6 @@ function playerHardDrop() {
   merge(arena, player); arenaSweep(); playerReset(); dropCounter = 0;
 }
 
-// ════════════════════════════════════════
-// SWEEP
-// ════════════════════════════════════════
 function arenaSweep() {
   let cleared = 0;
   for (let y = arena.length - 1; y >= 0; y--) {
@@ -518,13 +461,10 @@ function arenaSweep() {
   updateHUD();
 }
 
-// ════════════════════════════════════════
-// DRAWING
-// ════════════════════════════════════════
 function drawBlock(c, px, py, val) {
   const col = COLORS[val]; if (!col) return;
   const b = BLOCK;
-  c.fillStyle = col;     c.fillRect(px, py, b, b);
+  c.fillStyle = col; c.fillRect(px, py, b, b);
   c.fillStyle = 'rgba(255,255,255,0.22)';
   c.fillRect(px, py, b, Math.ceil(b*0.12));
   c.fillRect(px, py, Math.ceil(b*0.1), b);
@@ -537,6 +477,8 @@ function drawBlock(c, px, py, val) {
 }
 
 function drawGhost() {
+  // CORRECCIÓN: Guardia para evitar leer .pos de undefined
+  if (!player || !player.pos) return;
   let gy = player.pos.y;
   while (!collide(arena, { matrix: player.matrix, pos: { x: player.pos.x, y: gy+1 } })) gy++;
   if (gy === player.pos.y) return;
@@ -552,7 +494,8 @@ function drawGhost() {
 }
 
 function draw() {
-  if (!ctx) return;
+  // CORRECCIÓN: Guardia para evitar dibujar sin jugador o contexto
+  if (!ctx || !player) return;
   const cw = COLS*BLOCK, ch = ROWS*BLOCK;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
   ctx.strokeStyle = 'rgba(40,0,0,0.45)'; ctx.lineWidth = 0.5;
@@ -575,9 +518,6 @@ function drawNext() {
   BLOCK = savedBLOCK;
 }
 
-// ════════════════════════════════════════
-// HUD
-// ════════════════════════════════════════
 function set(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
 function updateHUD() {
   set('p-score', score); set('p-level', level); set('p-lines', lines); set('p-tetris', tetrisCount);
@@ -588,23 +528,15 @@ function updateHUD() {
   const bar = document.getElementById('p-bar'); if (bar) bar.style.width = (inLev*10)+'%';
 }
 
-// ════════════════════════════════════════
-// EFFECTS
-// ════════════════════════════════════════
 function showTetrisFlash() {
   const el = document.getElementById('tetris-flash');
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-  el.addEventListener('animationend', () => el.classList.remove('show'), { once:true });
 }
 function showLineFlash() {
   const el = document.getElementById('line-flash');
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-  el.addEventListener('animationend', () => el.classList.remove('show'), { once:true });
 }
 
-// ════════════════════════════════════════
-// PAUSE
-// ════════════════════════════════════════
 function togglePause() {
   if (!running) return;
   paused = !paused;
@@ -613,9 +545,6 @@ function togglePause() {
   if (!paused) { lastTime = performance.now(); animId = requestAnimationFrame(loop); }
 }
 
-// ════════════════════════════════════════
-// GAME LOOP
-// ════════════════════════════════════════
 function loop(time = 0) {
   if (!running || paused) return;
   const delta = time - lastTime; lastTime = time;
@@ -625,9 +554,6 @@ function loop(time = 0) {
   animId = requestAnimationFrame(loop);
 }
 
-// ════════════════════════════════════════
-// KEYBOARD
-// ════════════════════════════════════════
 document.addEventListener('keydown', e => {
   if (e.key==='ArrowLeft'  || e.key==='a') { e.preventDefault(); playerMove(-1); }
   if (e.key==='ArrowRight' || e.key==='d') { e.preventDefault(); playerMove(1); }
@@ -637,9 +563,6 @@ document.addEventListener('keydown', e => {
   if (e.key==='p'||e.key==='P')             { togglePause(); }
 });
 
-// ════════════════════════════════════════
-// BUTTON HOLD REPEAT
-// ════════════════════════════════════════
 let _holdTimer = null;
 function sh(action) {
   clearInterval(_holdTimer); _holdTimer = null;
@@ -655,21 +578,14 @@ function doAct(a) {
   if (a==='hard')  playerHardDrop();
 }
 
-// ════════════════════════════════════════
-// SWIPE / TAP GESTURES — applied to BOTH canvases
-// ════════════════════════════════════════
 function initSwipe(cv) {
   let tx = 0, ty = 0, moved = false, lastMoveX = 0;
-  const CELL_PX   = () => BLOCK;          // px to trigger left/right step
-  const TAP_MAX   = 18;
-  const SWIPE_MIN = 22;
-
+  const CELL_PX = () => BLOCK;
   cv.addEventListener('touchstart', e => {
     e.preventDefault();
     const t = e.changedTouches[0];
     tx = lastMoveX = t.clientX; ty = t.clientY; moved = false;
   }, { passive:false });
-
   cv.addEventListener('touchmove', e => {
     e.preventDefault();
     const t = e.changedTouches[0];
@@ -680,40 +596,22 @@ function initSwipe(cv) {
       moved = true;
     }
   }, { passive:false });
-
   cv.addEventListener('touchend', e => {
     e.preventDefault();
     const t = e.changedTouches[0];
     const dx = t.clientX - tx, dy = t.clientY - ty;
-    const absDx = Math.abs(dx), absDy = Math.abs(dy);
-    // tap → rotate
-    if (!moved && absDx < TAP_MAX && absDy < TAP_MAX) { playerRotate(1); return; }
-    // swipe down → hard drop
-    if (dy > SWIPE_MIN && absDy > absDx) { playerHardDrop(); return; }
-    // swipe up → rotate
-    if (dy < -SWIPE_MIN && absDy > absDx) { playerRotate(1); return; }
+    if (!moved && Math.abs(dx) < 18 && Math.abs(dy) < 18) { playerRotate(1); return; }
+    if (dy > 22 && Math.abs(dy) > Math.abs(dx)) { playerHardDrop(); return; }
+    if (dy < -22 && Math.abs(dy) > Math.abs(dx)) { playerRotate(1); return; }
   }, { passive:false });
 }
 
 initSwipe(cvP);
 initSwipe(cvL);
 
-// ════════════════════════════════════════
-// ORIENTATION CHANGE
-// ════════════════════════════════════════
-function onOrientationChange() {
-  setTimeout(() => {
-    if (document.getElementById('screen-game').classList.contains('active')) {
-      computeSizes();
-    }
-  }, 220);
-}
-window.addEventListener('resize',            onOrientationChange);
-window.addEventListener('orientationchange', onOrientationChange);
+window.addEventListener('resize', () => setTimeout(computeSizes, 220));
+window.addEventListener('orientationchange', () => setTimeout(computeSizes, 220));
 
-// ════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════
 computeSizes();
 </script>
 </body>
