@@ -2,7 +2,7 @@ extends Control
 
 const COLS := 10
 const ROWS := 20
-const LINE_POINTS := [0, 100, 300, 500, 800]
+const LINE_POINTS: Array[int] = [0, 100, 300, 500, 800]
 const PIECES := {
 	"I": [[1, 1, 1, 1]],
 	"O": [[2, 2], [2, 2]],
@@ -12,8 +12,8 @@ const PIECES := {
 	"J": [[6, 0, 0], [6, 6, 6]],
 	"L": [[0, 0, 7], [7, 7, 7]],
 }
-const PIECE_NAMES := ["mate", "dulce", "bandoneon", "potrero", "campeon", "tango", "hinchada"]
-const PIECE_COLORS := [
+const PIECE_NAMES: Array[String] = ["mate", "dulce", "bandoneon", "potrero", "campeon", "tango", "hinchada"]
+const PIECE_COLORS: Array[Color] = [
 	Color.TRANSPARENT,
 	Color("#76c7f2"),
 	Color("#f7c948"),
@@ -29,18 +29,18 @@ const REGION_NEXT_PANEL := Rect2(686, 178, 318, 304)
 const REGION_PAUSE_BUTTON := Rect2(1420, 198, 144, 160)
 const REGION_PLAY_BUTTON := Rect2(1608, 198, 144, 160)
 const REGION_MENU_TROPHY := Rect2(432, 208, 278, 304)
-const POWERUP_REGIONS := [
+const POWERUP_REGIONS: Array[Rect2] = [
 	Rect2(582, 146, 300, 260), # VAR
 	Rect2(1000, 126, 330, 280), # Aliento
 	Rect2(56, 598, 350, 315), # Jugada de Potrero
 ]
-const EFFECT_REGIONS := [
+const EFFECT_REGIONS: Array[Rect2] = [
 	Rect2(48, 154, 260, 220), # Papelitos
 	Rect2(548, 154, 240, 220), # Nube
 	Rect2(58, 606, 300, 280), # Burst
 	Rect2(1108, 612, 275, 260), # Red
 ]
-const CROWD_REGIONS := [
+const CROWD_REGIONS: Array[Rect2] = [
 	Rect2(98, 174, 330, 300),
 	Rect2(548, 170, 335, 305),
 	Rect2(1008, 174, 335, 300),
@@ -48,7 +48,7 @@ const CROWD_REGIONS := [
 	Rect2(548, 584, 345, 285),
 	Rect2(1018, 590, 340, 278),
 ]
-const COMBO_REGIONS := [
+const COMBO_REGIONS: Array[Rect2] = [
 	Rect2(84, 150, 300, 230),
 	Rect2(570, 130, 270, 280),
 	Rect2(956, 160, 370, 250),
@@ -56,7 +56,7 @@ const COMBO_REGIONS := [
 	Rect2(558, 668, 330, 250),
 	Rect2(1038, 640, 305, 270),
 ]
-const REWARD_REGIONS := [
+const REWARD_REGIONS: Array[Rect2] = [
 	Rect2(96, 184, 270, 260),
 	Rect2(460, 184, 280, 270),
 	Rect2(772, 224, 260, 220),
@@ -66,7 +66,7 @@ const REWARD_REGIONS := [
 	Rect2(758, 614, 290, 250),
 	Rect2(1138, 618, 250, 240),
 ]
-const TROPHY_REGIONS := [
+const TROPHY_REGIONS: Array[Rect2] = [
 	Rect2(70, 137, 220, 280),
 	Rect2(380, 145, 220, 250),
 	Rect2(680, 176, 200, 220),
@@ -95,7 +95,6 @@ var playing := false
 var paused := false
 var game_over := false
 var board_rect := Rect2()
-var next_rect := Rect2()
 var touch_start := Vector2.ZERO
 var touch_last := Vector2.ZERO
 var touch_moved := false
@@ -397,10 +396,12 @@ func _new_board() -> void:
 
 
 func _random_piece() -> Dictionary:
-	var keys := PIECES.keys()
-	var key: String = keys[rng.randi_range(0, keys.size() - 1)]
+	var keys: Array = PIECES.keys()
+	var key := String(keys[rng.randi_range(0, keys.size() - 1)])
 	var matrix: Array = []
-	for row in PIECES[key]:
+	var source_matrix: Array = PIECES[key] as Array
+	for source_row in source_matrix:
+		var row: Array = source_row as Array
 		matrix.append(row.duplicate())
 	return {
 		"key": key,
@@ -412,8 +413,10 @@ func _random_piece() -> Dictionary:
 func _spawn_piece() -> void:
 	current_piece = next_piece
 	next_piece = _random_piece()
-	current_pos = Vector2i((COLS - current_piece.matrix[0].size()) / 2, 0)
-	if _collides(current_piece.matrix, current_pos):
+	var matrix: Array = _piece_matrix(current_piece)
+	var first_row: Array = matrix[0] as Array
+	current_pos = Vector2i(int((COLS - first_row.size()) / 2), 0)
+	if _collides(matrix, current_pos):
 		playing = false
 		game_over = true
 		message_label.text = "Fin del partido. Puntaje: %s" % score
@@ -421,10 +424,20 @@ func _spawn_piece() -> void:
 	_update_hud()
 
 
+func _piece_matrix(piece: Dictionary) -> Array:
+	return piece.get("matrix", []) as Array
+
+
+func _set_piece_matrix(piece: Dictionary, matrix: Array) -> void:
+	piece["matrix"] = matrix
+
+
 func _collides(matrix: Array, pos: Vector2i) -> bool:
 	for y in range(matrix.size()):
-		for x in range(matrix[y].size()):
-			if matrix[y][x] == 0:
+		var row: Array = matrix[y] as Array
+		for x in range(row.size()):
+			var cell_value := int(row[x])
+			if cell_value == 0:
 				continue
 			var bx := pos.x + x
 			var by := pos.y + y
@@ -439,7 +452,8 @@ func _move(dir: Vector2i) -> void:
 	if not _can_act():
 		return
 	var next_pos := current_pos + dir
-	if not _collides(current_piece.matrix, next_pos):
+	var matrix: Array = _piece_matrix(current_piece)
+	if not _collides(matrix, next_pos):
 		current_pos = next_pos
 		canvas.queue_redraw()
 
@@ -449,7 +463,8 @@ func _soft_drop() -> void:
 		return
 	drop_timer = 0.0
 	var next_pos := current_pos + Vector2i.DOWN
-	if _collides(current_piece.matrix, next_pos):
+	var matrix: Array = _piece_matrix(current_piece)
+	if _collides(matrix, next_pos):
 		_lock_piece()
 	else:
 		current_pos = next_pos
@@ -459,7 +474,8 @@ func _soft_drop() -> void:
 func _hard_drop() -> void:
 	if not _can_act():
 		return
-	while not _collides(current_piece.matrix, current_pos + Vector2i.DOWN):
+	var matrix: Array = _piece_matrix(current_piece)
+	while not _collides(matrix, current_pos + Vector2i.DOWN):
 		current_pos += Vector2i.DOWN
 	score += 2
 	_lock_piece()
@@ -468,11 +484,11 @@ func _hard_drop() -> void:
 func _rotate() -> void:
 	if not _can_act():
 		return
-	var rotated := _rotated(current_piece.matrix)
+	var rotated: Array = _rotated(_piece_matrix(current_piece))
 	for kick in [0, -1, 1, -2, 2]:
 		var test_pos := current_pos + Vector2i(kick, 0)
 		if not _collides(rotated, test_pos):
-			current_piece.matrix = rotated
+			_set_piece_matrix(current_piece, rotated)
 			current_pos = test_pos
 			canvas.queue_redraw()
 			return
@@ -480,7 +496,8 @@ func _rotate() -> void:
 
 func _rotated(matrix: Array) -> Array:
 	var result: Array = []
-	var width: int = matrix[0].size()
+	var first_row: Array = matrix[0] as Array
+	var width := first_row.size()
 	var height: int = matrix.size()
 	for x in range(width):
 		var row: Array[int] = []
@@ -492,9 +509,11 @@ func _rotated(matrix: Array) -> Array:
 
 func _lock_piece() -> void:
 	previous_board = _clone_board(board)
-	for y in range(current_piece.matrix.size()):
-		for x in range(current_piece.matrix[y].size()):
-			var val: int = current_piece.matrix[y][x]
+	var matrix: Array = _piece_matrix(current_piece)
+	for y in range(matrix.size()):
+		var row: Array = matrix[y] as Array
+		for x in range(row.size()):
+			var val := int(row[x])
 			if val == 0:
 				continue
 			var bx := current_pos.x + x
@@ -614,7 +633,7 @@ func _relator_phrase(cleared: int) -> String:
 		return "ESTO ES ARGENTRIS"
 	if combo_streak >= 3:
 		return "SE ARMO EL ASADO"
-	var phrases := [
+	var phrases: Array[String] = [
 		"LINEA LIMPIA",
 		"QUE MANERA DE ACOMODAR",
 		"SE PICO EL TABLERO",
@@ -626,7 +645,8 @@ func _relator_phrase(cleared: int) -> String:
 func _clone_board(source: Array) -> Array:
 	var copy: Array = []
 	for row in source:
-		copy.append(row.duplicate())
+		var source_row: Array = row as Array
+		copy.append(source_row.duplicate())
 	return copy
 
 
@@ -732,7 +752,7 @@ func _draw_game() -> void:
 	board_rect = Rect2(Vector2((area.size.x - board_size.x) * 0.5, maxf(86.0, (area.size.y - board_size.y) * 0.5)), board_size)
 	_draw_board(board_rect, cell)
 	var side_x := board_rect.end.x + 18.0
-	next_rect = Rect2(Vector2(side_x, board_rect.position.y + 12), Vector2(minf(120.0, area.size.x - side_x - 12), minf(120.0, area.size.x - side_x - 12)))
+	var next_rect := Rect2(Vector2(side_x, board_rect.position.y + 12), Vector2(minf(120.0, area.size.x - side_x - 12), minf(120.0, area.size.x - side_x - 12)))
 	if next_rect.size.x > 36.0:
 		_draw_next(next_rect)
 	_draw_score_panel(area)
@@ -764,25 +784,28 @@ func _draw_board(rect: Rect2, cell: float) -> void:
 	canvas.draw_rect(rect.grow(8), Color("#101827"))
 	canvas.draw_rect(rect.grow(5), Color("#eef8ff"), false, 3.0)
 	for y in range(ROWS):
+		var board_row: Array = board[y] as Array
 		for x in range(COLS):
 			var block_rect := Rect2(rect.position + Vector2(x * cell, y * cell), Vector2(cell, cell))
 			canvas.draw_rect(block_rect, Color("#07111f"))
 			canvas.draw_rect(block_rect, Color("#22324a"), false, 1.0)
-			var val: int = board[y][x]
+			var val := int(board_row[x])
 			if val != 0:
 				_draw_block(block_rect, val)
 	if playing and not current_piece.is_empty():
 		var ghost_y := current_pos.y
-		while not _collides(current_piece.matrix, Vector2i(current_pos.x, ghost_y + 1)):
+		var matrix: Array = _piece_matrix(current_piece)
+		while not _collides(matrix, Vector2i(current_pos.x, ghost_y + 1)):
 			ghost_y += 1
-		_draw_piece(rect, cell, current_piece.matrix, Vector2i(current_pos.x, ghost_y), 0.22)
-		_draw_piece(rect, cell, current_piece.matrix, current_pos, 1.0)
+		_draw_piece(rect, cell, matrix, Vector2i(current_pos.x, ghost_y), 0.22)
+		_draw_piece(rect, cell, matrix, current_pos, 1.0)
 
 
 func _draw_piece(rect: Rect2, cell: float, matrix: Array, pos: Vector2i, alpha: float) -> void:
 	for y in range(matrix.size()):
-		for x in range(matrix[y].size()):
-			var val: int = matrix[y][x]
+		var row: Array = matrix[y] as Array
+		for x in range(row.size()):
+			var val := int(row[x])
 			if val == 0:
 				continue
 			var block_rect := Rect2(rect.position + Vector2((pos.x + x) * cell, (pos.y + y) * cell), Vector2(cell, cell))
@@ -790,7 +813,7 @@ func _draw_piece(rect: Rect2, cell: float, matrix: Array, pos: Vector2i, alpha: 
 
 
 func _draw_block(rect: Rect2, val: int, alpha: float = 1.0) -> void:
-	var color: Color = PIECE_COLORS[val]
+	var color: Color = PIECE_COLORS[val] as Color
 	color.a = alpha
 	var target := rect.grow(-1)
 	if not skin_textures.is_empty():
@@ -806,17 +829,19 @@ func _draw_next(rect: Rect2) -> void:
 	_draw_tex(ui_tex, REGION_NEXT_PANEL, rect.grow(8), Color(1, 1, 1, 0.92))
 	if next_piece.is_empty():
 		return
-	var matrix: Array = next_piece.matrix
+	var matrix: Array = _piece_matrix(next_piece)
 	var cell := floorf(minf(rect.size.x / 4.0, rect.size.y / 4.0))
-	var offset := rect.position + (rect.size - Vector2(matrix[0].size() * cell, matrix.size() * cell)) * 0.5
+	var first_row: Array = matrix[0] as Array
+	var offset := rect.position + (rect.size - Vector2(first_row.size() * cell, matrix.size() * cell)) * 0.5
 	for y in range(matrix.size()):
-		for x in range(matrix[y].size()):
-			var val: int = matrix[y][x]
+		var row: Array = matrix[y] as Array
+		for x in range(row.size()):
+			var val := int(row[x])
 			if val != 0:
 				_draw_block(Rect2(offset + Vector2(x * cell, y * cell), Vector2(cell, cell)), val)
 
 
-func _draw_score_panel(area: Rect2) -> void:
+func _draw_score_panel(_area: Rect2) -> void:
 	var panel_w := minf(142.0, maxf(118.0, board_rect.position.x - 12.0))
 	var panel := Rect2(Vector2(8, board_rect.position.y + 20), Vector2(panel_w, 176))
 	_draw_tex(ui_tex, REGION_SCORE_PANEL, panel, Color(1, 1, 1, 0.94))
@@ -830,7 +855,7 @@ func _draw_score_panel(area: Rect2) -> void:
 	_draw_bitmap_text(str(level), panel.position + Vector2(panel_w * 0.62, 100), value_h)
 
 
-func _draw_powerups(area: Rect2) -> void:
+func _draw_powerups(_area: Rect2) -> void:
 	var icon := 34.0
 	var start := Vector2(10, board_rect.position.y + 208)
 	for i in range(POWERUP_REGIONS.size()):
@@ -857,7 +882,7 @@ func _draw_combo_fx(area: Rect2) -> void:
 	if combo_streak <= 0 and banner_time <= 0.0:
 		return
 	var crowd_idx: int = combo_streak % CROWD_REGIONS.size()
-	var crowd_region: Rect2 = CROWD_REGIONS[crowd_idx]
+	var crowd_region := CROWD_REGIONS[crowd_idx] as Rect2
 	var crowd_h: float = minf(82.0, area.size.y * 0.1)
 	var crowd_w: float = crowd_h * crowd_region.size.x / crowd_region.size.y
 	_draw_tex(crowd_tex, crowd_region, Rect2(Vector2(12, board_rect.end.y - crowd_h - 10), Vector2(crowd_w, crowd_h)), Color(1, 1, 1, 0.88))
@@ -946,10 +971,11 @@ func _draw_ad_overlay(area: Rect2) -> void:
 func _draw_bitmap_text(text: String, pos: Vector2, height: float, modulate: Color = Color.WHITE) -> void:
 	var cursor := pos
 	for raw_char in text.to_upper():
-		if raw_char == " ":
+		var character := String(raw_char)
+		if character == " ":
 			cursor.x += height * 0.55
 			continue
-		var source := _font_region(raw_char)
+		var source := _font_region(character)
 		if source.size == Vector2.ZERO:
 			cursor.x += height * 0.45
 			continue
@@ -961,10 +987,11 @@ func _draw_bitmap_text(text: String, pos: Vector2, height: float, modulate: Colo
 func _bitmap_text_size(text: String, height: float) -> Vector2:
 	var width := 0.0
 	for raw_char in text.to_upper():
-		if raw_char == " ":
+		var character := String(raw_char)
+		if character == " ":
 			width += height * 0.55
 			continue
-		var source := _font_region(raw_char)
+		var source := _font_region(character)
 		width += (height * source.size.x / source.size.y) + height * 0.08 if source.size != Vector2.ZERO else height * 0.45
 	return Vector2(width, height)
 
