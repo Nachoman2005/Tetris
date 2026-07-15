@@ -117,12 +117,6 @@ var previous_board: Array = []
 var rng := RandomNumberGenerator.new()
 
 @onready var root := VBoxContainer.new()
-@onready var title_label := Label.new()
-@onready var subtitle_label := Label.new()
-@onready var score_label := Label.new()
-@onready var level_label := Label.new()
-@onready var lines_label := Label.new()
-@onready var next_label := Label.new()
 @onready var message_label := Label.new()
 @onready var start_button := Button.new()
 @onready var pause_button := Button.new()
@@ -130,8 +124,10 @@ var rng := RandomNumberGenerator.new()
 @onready var left_button := Button.new()
 @onready var rotate_button := Button.new()
 @onready var right_button := Button.new()
+@onready var soft_drop_button := Button.new()
 @onready var drop_button := Button.new()
 @onready var canvas := Control.new()
+@onready var custom_font: Font = preload("res://assets/fonts/PressStart2P-Regular.ttf")
 @onready var font_tex: Texture2D = preload("res://assets/graphics/processed/font.png")
 @onready var trophies_tex: Texture2D = preload("res://assets/graphics/processed/trophies.png")
 @onready var ui_tex: Texture2D = preload("res://assets/graphics/processed/UI.png")
@@ -193,10 +189,6 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		_handle_keyboard(event)
-	elif event is InputEventScreenTouch:
-		_handle_touch(event)
-	elif event is InputEventScreenDrag:
-		_handle_drag(event)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -269,6 +261,13 @@ func _handle_keyboard(event: InputEventKey) -> void:
 
 func _build_ui() -> void:
 	add_theme_color_override("font_color", Color("#eef8ff"))
+	
+	# Apply pixel font to the entire UI hierarchy
+	var theme := Theme.new()
+	if custom_font:
+		theme.default_font = custom_font
+	root.theme = theme
+	
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 10)
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -276,43 +275,23 @@ func _build_ui() -> void:
 	root.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(root)
 
-	var header := VBoxContainer.new()
-	header.alignment = BoxContainer.ALIGNMENT_CENTER
-	title_label.text = "ARGENTRIS"
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 44)
-	title_label.visible = false
-	subtitle_label.text = "bloques, mate y potrero"
-	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle_label.add_theme_font_size_override("font_size", 18)
-	subtitle_label.visible = false
-	header.add_child(title_label)
-	header.add_child(subtitle_label)
-	root.add_child(header)
-
-	var stats := HBoxContainer.new()
-	stats.alignment = BoxContainer.ALIGNMENT_CENTER
-	stats.add_theme_constant_override("separation", 18)
-	for label in [score_label, level_label, lines_label, next_label]:
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 18)
-		label.visible = false
-		stats.add_child(label)
-	root.add_child(stats)
-
+	# Canvas setup
 	canvas.custom_minimum_size = Vector2(520, 760)
 	canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	canvas.draw.connect(_draw_game)
+	canvas.gui_input.connect(_handle_canvas_gui_input)
 	root.add_child(canvas)
 
+	# Message/Instruction Label
 	message_label.text = "PC: flechas/WASD, espacio, Enter y P. Movil: botones, tap y swipe."
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message_label.add_theme_font_size_override("font_size", 16)
-	message_label.visible = false
+	message_label.add_theme_font_size_override("font_size", 12)
+	message_label.visible = true
 	root.add_child(message_label)
 
+	# Action Buttons (Start, Pause, Character)
 	var actions := HBoxContainer.new()
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	actions.add_theme_constant_override("separation", 10)
@@ -336,26 +315,43 @@ func _build_ui() -> void:
 	actions.add_child(character_button)
 	root.add_child(actions)
 
-	var controls := GridContainer.new()
-	controls.columns = 3
-	controls.add_theme_constant_override("h_separation", 10)
-	controls.add_theme_constant_override("v_separation", 10)
-	for button in [left_button, rotate_button, right_button, drop_button]:
-		button.custom_minimum_size = Vector2(150, 76)
-		button.add_theme_font_size_override("font_size", 24)
+	# Controls - Row 1 (GridContainer with 3 columns)
+	var controls_grid := GridContainer.new()
+	controls_grid.columns = 3
+	controls_grid.alignment = FlowContainer.ALIGNMENT_CENTER
+	controls_grid.add_theme_constant_override("h_separation", 10)
+	controls_grid.add_theme_constant_override("v_separation", 10)
+	controls_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	
+	for button in [left_button, rotate_button, right_button]:
+		button.custom_minimum_size = Vector2(100, 64)
+		button.add_theme_font_size_override("font_size", 16)
+		controls_grid.add_child(button)
+		
 	left_button.text = "<"
 	rotate_button.text = "Girar"
 	right_button.text = ">"
-	drop_button.text = "Caida"
 	left_button.pressed.connect(func(): _move(Vector2i.LEFT))
 	right_button.pressed.connect(func(): _move(Vector2i.RIGHT))
 	rotate_button.pressed.connect(_rotate)
+	root.add_child(controls_grid)
+
+	# Controls - Row 2 (HBoxContainer for Drop buttons)
+	var drop_hbox := HBoxContainer.new()
+	drop_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	drop_hbox.add_theme_constant_override("separation", 10)
+	drop_hbox.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	
+	for button in [soft_drop_button, drop_button]:
+		button.custom_minimum_size = Vector2(155, 64)
+		button.add_theme_font_size_override("font_size", 16)
+		drop_hbox.add_child(button)
+		
+	soft_drop_button.text = "Bajar"
+	drop_button.text = "Caida"
+	soft_drop_button.pressed.connect(_soft_drop)
 	drop_button.pressed.connect(_hard_drop)
-	controls.add_child(left_button)
-	controls.add_child(rotate_button)
-	controls.add_child(right_button)
-	controls.add_child(drop_button)
-	root.add_child(controls)
+	root.add_child(drop_hbox)
 
 
 func _start_game() -> void:
@@ -596,14 +592,14 @@ func _use_powerup(index: int) -> void:
 			_show_relator("ALIENTO DE HINCHADA")
 		2:
 			_clear_lowest_rows(2)
-			_show_relator("JUGADA DE POTRERO")
 	_update_hud()
 	canvas.queue_redraw()
 
 
 func _clear_lowest_rows(amount: int) -> void:
 	var cleared := 0
-	for y in range(ROWS - 1, -1, -1):
+	var y := ROWS - 1
+	while y >= 0 and cleared < amount:
 		var occupied := false
 		for x in range(COLS):
 			if board[y][x] != 0:
@@ -616,11 +612,21 @@ func _clear_lowest_rows(amount: int) -> void:
 				row.append(0)
 			board.push_front(row)
 			cleared += 1
-			if cleared >= amount:
-				break
+		else:
+			y -= 1
+			
 	if cleared > 0:
+		var previous_level := level
 		score += 250 * cleared * level
 		lines += cleared
+		level = int(lines / 10) + 1
+		if level > previous_level:
+			max_trophy_count = maxi(max_trophy_count, mini(level - 1, TROPHY_REGIONS.size()))
+			_update_active_skin()
+			_show_ad("PUBLICIDAD", "NIVEL %s" % level, "continue")
+		drop_interval = maxf(0.12, 0.95 - float(level - 1) * 0.075)
+		_show_relator("JUGADA DE POTRERO")
+		_update_hud()
 
 
 func _show_relator(text: String) -> void:
@@ -698,11 +704,8 @@ func _can_act() -> bool:
 
 
 func _update_hud() -> void:
-	score_label.text = "Puntos\n%s" % score
-	level_label.text = "Nivel\n%s" % level
-	lines_label.text = "Lineas\n%s" % lines
-	next_label.text = "Proximo\n%s" % next_piece.get("theme", "mate")
 	pause_button.disabled = not playing
+	canvas.queue_redraw()
 
 
 func _show_banner(text: String) -> void:
@@ -710,8 +713,15 @@ func _show_banner(text: String) -> void:
 	banner_time = 1.2
 
 
+func _handle_canvas_gui_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		_handle_touch(event)
+	elif event is InputEventScreenDrag:
+		_handle_drag(event)
+
+
 func _handle_touch(event: InputEventScreenTouch) -> void:
-	var local_pos := event.position - canvas.global_position
+	var local_pos := event.position
 	if ad_active:
 		if not event.pressed and ad_timer <= 0.0:
 			_finish_ad()
@@ -729,7 +739,7 @@ func _handle_touch(event: InputEventScreenTouch) -> void:
 
 
 func _handle_drag(event: InputEventScreenDrag) -> void:
-	var local_pos := event.position - canvas.global_position
+	var local_pos := event.position
 	if not board_rect.has_point(local_pos):
 		return
 	var cell := board_rect.size.x / COLS
@@ -745,30 +755,57 @@ func _draw_game() -> void:
 	var bg := Color("#0b1020")
 	canvas.draw_rect(area, bg)
 	_draw_background(area)
+	
+	# Draw logo
 	_draw_tex(font_tex, REGION_LOGO, Rect2(Vector2(area.size.x * 0.5 - 190, 8), Vector2(380, 72)))
-	var cell := floorf(minf(area.size.x * 0.68 / COLS, area.size.y * 0.92 / ROWS))
+	
+	# Responsive Columns Layout
+	var left_w := 126.0
+	var right_w := 126.0
+	var gap := 12.0
+	
+	var avail_w := area.size.x - left_w - right_w - 2.0 * gap
+	var avail_h := area.size.y - 86.0 - 16.0 # 86px top offset, 16px bottom margin
+	
+	var cell_w := avail_w / COLS
+	var cell_h := avail_h / ROWS
+	var cell := floorf(minf(cell_w, cell_h))
 	cell = clampf(cell, 18.0, 42.0)
+	
 	var board_size := Vector2(cell * COLS, cell * ROWS)
-	board_rect = Rect2(Vector2((area.size.x - board_size.x) * 0.5, maxf(86.0, (area.size.y - board_size.y) * 0.5)), board_size)
+	var middle_center := left_w + gap + avail_w * 0.5
+	var board_x := middle_center - board_size.x * 0.5
+	var board_y := 86.0 + (avail_h - board_size.y) * 0.5
+	board_rect = Rect2(Vector2(board_x, board_y), board_size)
+	
+	# Draw board
 	_draw_board(board_rect, cell)
-	var side_x := board_rect.end.x + 18.0
-	var next_rect := Rect2(Vector2(side_x, board_rect.position.y + 12), Vector2(minf(120.0, area.size.x - side_x - 12), minf(120.0, area.size.x - side_x - 12)))
-	if next_rect.size.x > 36.0:
-		_draw_next(next_rect)
-	_draw_score_panel(area)
-	_draw_trophies(area)
-	_draw_selected_character(area)
-	_draw_powerups(area)
+	
+	# Draw Next Piece Panel
+	var next_rect := Rect2(Vector2(board_rect.end.x + gap, board_rect.position.y + 20), Vector2(right_w, 120))
+	_draw_next(next_rect)
+	
+	# Draw Left Side panels
+	_draw_score_panel_custom(board_rect.position.x - gap - left_w, left_w)
+	_draw_powerups_custom(board_rect.position.x - gap - left_w, left_w)
+	_draw_trophies_custom(board_rect.position.x - gap - left_w, area.size.y)
+	
+	# Draw Right Side panels
+	_draw_selected_character_custom(board_rect.end.x + gap, right_w, area.size.y)
+	
 	_draw_combo_fx(area)
 	_draw_relator(area)
+	
 	if paused:
 		_draw_center_text("PAUSA", Color("#f7c948"))
 	elif game_over:
 		_draw_center_text("FIN", Color("#f25f5c"))
 	elif not playing:
 		_draw_center_text("TOCA JUGAR", Color("#f7c948"))
+		
 	if banner_time > 0.0:
 		_draw_center_text(banner_text, Color("#f7c948"))
+		
 	if ad_active:
 		_draw_ad_overlay(area)
 
@@ -841,40 +878,42 @@ func _draw_next(rect: Rect2) -> void:
 				_draw_block(Rect2(offset + Vector2(x * cell, y * cell), Vector2(cell, cell)), val)
 
 
-func _draw_score_panel(_area: Rect2) -> void:
-	var panel_w := minf(142.0, maxf(118.0, board_rect.position.x - 12.0))
-	var panel := Rect2(Vector2(8, board_rect.position.y + 20), Vector2(panel_w, 176))
+func _draw_score_panel_custom(x_pos: float, width: float) -> void:
+	var panel := Rect2(Vector2(x_pos, board_rect.position.y + 20), Vector2(width, 176))
 	_draw_tex(ui_tex, REGION_SCORE_PANEL, panel, Color(1, 1, 1, 0.94))
-	var label_h := 9.0
-	var value_h := 13.0
-	_draw_bitmap_text("SCORE", panel.position + Vector2(26, 24), label_h)
-	_draw_bitmap_text(str(score), panel.position + Vector2(26, 42), value_h)
-	_draw_bitmap_text("LINEAS", panel.position + Vector2(22, 82), label_h)
-	_draw_bitmap_text(str(lines), panel.position + Vector2(22, 100), value_h)
-	_draw_bitmap_text("NIVEL", panel.position + Vector2(panel_w * 0.58, 82), label_h)
-	_draw_bitmap_text(str(level), panel.position + Vector2(panel_w * 0.62, 100), value_h)
+	
+	_draw_bitmap_text("SCORE", panel.position + Vector2(16, 24), 8)
+	_draw_bitmap_text(str(score), panel.position + Vector2(16, 42), 16)
+	_draw_bitmap_text("LINEAS", panel.position + Vector2(16, 82), 8)
+	_draw_bitmap_text(str(lines), panel.position + Vector2(16, 100), 16)
+	_draw_bitmap_text("NIVEL", panel.position + Vector2(width * 0.58, 82), 8)
+	_draw_bitmap_text(str(level), panel.position + Vector2(width * 0.62, 100), 16)
 
 
-func _draw_powerups(_area: Rect2) -> void:
+func _draw_powerups_custom(x_pos: float, width: float) -> void:
 	var icon := 34.0
-	var start := Vector2(10, board_rect.position.y + 208)
+	var start_x := x_pos + (width - 118.0) * 0.5
+	var start := Vector2(start_x, board_rect.position.y + 208)
 	for i in range(POWERUP_REGIONS.size()):
 		var target := Rect2(start + Vector2(i * (icon + 8), 0), Vector2(icon, icon))
 		_draw_tex(powerups_tex, POWERUP_REGIONS[i], target, Color(1, 1, 1, 0.95 if powerup_charges[i] > 0 else 0.35))
-		_draw_bitmap_text(str(i + 1), target.position + Vector2(10, icon + 3), 9)
-		_draw_bitmap_text("X%s" % powerup_charges[i], target.position + Vector2(0, icon + 16), 8)
+		_draw_bitmap_text(str(i + 1), target.position + Vector2(12, icon + 4), 8)
+		_draw_bitmap_text("X%s" % powerup_charges[i], target.position + Vector2(4, icon + 16), 8)
 
 
-func _draw_trophies(area: Rect2) -> void:
+func _draw_trophies_custom(x_pos: float, area_height: float) -> void:
 	if max_trophy_count <= 0:
-		_draw_bitmap_text("TROFEOS 0", Vector2(12, area.size.y - 32), 10)
+		_draw_bitmap_text("TROFEOS 0", Vector2(x_pos, area_height - 32), 8)
 		return
+		
 	var icon_size := 34.0
-	var start := Vector2(10, area.size.y - icon_size - 8)
+	var start := Vector2(x_pos, area_height - icon_size - 8)
 	for i in range(max_trophy_count):
 		if i >= TROPHY_REGIONS.size():
 			break
-		var target := Rect2(start + Vector2(i * (icon_size + 4), 0), Vector2(icon_size, icon_size))
+		var row := int(i / 3)
+		var col := i % 3
+		var target := Rect2(start + Vector2(col * (icon_size + 8), -row * (icon_size + 8)), Vector2(icon_size, icon_size))
 		_draw_tex(trophies_tex, TROPHY_REGIONS[i], target)
 
 
@@ -894,21 +933,22 @@ func _draw_combo_fx(area: Rect2) -> void:
 		_draw_tex(effects_tex, EFFECT_REGIONS[fx_idx], Rect2(board_rect.get_center() - Vector2(88, 72), Vector2(176, 144)), Color(1, 1, 1, minf(1.0, banner_time)))
 
 
-func _draw_selected_character(area: Rect2) -> void:
+func _draw_selected_character_custom(x_pos: float, width: float, area_height: float) -> void:
 	if character_textures.is_empty():
 		return
 	var texture := character_textures[clampi(selected_character, 0, character_textures.size() - 1)]
-	var height: float = minf(145.0, area.size.y * 0.18)
-	var width: float = height * float(texture.get_width()) / float(texture.get_height())
-	var pos: Vector2 = Vector2(area.size.x - width - 10, area.size.y - height - 8)
-	_draw_full_tex(texture, Rect2(pos, Vector2(width, height)), Color(1, 1, 1, 0.92))
-	_draw_bitmap_text("PERSONAJE", Vector2(pos.x, pos.y - 24), 9)
+	var height: float = minf(145.0, area_height * 0.18)
+	var tex_w: float = height * float(texture.get_width()) / float(texture.get_height())
+	
+	var pos := Vector2(x_pos + (width - tex_w) * 0.5, area_height - height - 8)
+	_draw_full_tex(texture, Rect2(pos, Vector2(tex_w, height)), Color(1, 1, 1, 0.92))
+	_draw_bitmap_text("PERSONAJE", Vector2(x_pos + (width - _bitmap_text_size("PERSONAJE", 8).x) * 0.5, pos.y - 20), 8)
 
 
 func _draw_relator(area: Rect2) -> void:
 	if relator_timer <= 0.0 or relator_text.is_empty():
 		return
-	var text_h := 15.0
+	var text_h := 16.0
 	var size := _bitmap_text_size(relator_text, text_h)
 	var pos := Vector2((area.size.x - size.x) * 0.5, board_rect.position.y - 24)
 	canvas.draw_rect(Rect2(pos - Vector2(10, 6), size + Vector2(20, 13)), Color(0, 0, 0, 0.62))
@@ -958,69 +998,25 @@ func _draw_ad_overlay(area: Rect2) -> void:
 	canvas.draw_rect(panel, Color("#f7c948"), false, 4.0)
 	_draw_bitmap_text(ad_title, panel.position + Vector2(42, 34), 24)
 	_draw_bitmap_text(ad_body, panel.position + Vector2(42, 94), 16)
-	_draw_bitmap_text("ESPACIO PUBLICITARIO", panel.position + Vector2(42, 138), 12)
-	_draw_bitmap_text("AQUI VA ADMOB", panel.position + Vector2(42, 164), 12)
+	_draw_bitmap_text("ESPACIO PUBLICITARIO", panel.position + Vector2(42, 138), 8)
+	_draw_bitmap_text("AQUI VA ADMOB", panel.position + Vector2(42, 164), 8)
 	var reward_idx := maxi(level - 1, 0) % REWARD_REGIONS.size()
 	_draw_tex(rewards_tex, REWARD_REGIONS[reward_idx], Rect2(panel.position + Vector2(panel.size.x - 112, 122), Vector2(76, 76)))
 	if ad_timer > 0.0:
-		_draw_bitmap_text("ESPERA %s" % ceili(ad_timer), panel.position + Vector2(42, 224), 14)
+		_draw_bitmap_text("ESPERA %s" % ceili(ad_timer), panel.position + Vector2(42, 224), 16)
 	else:
-		_draw_bitmap_text("ENTER PARA SEGUIR", panel.position + Vector2(42, 224), 14)
+		_draw_bitmap_text("ENTER PARA SEGUIR", panel.position + Vector2(42, 224), 16)
 
 
 func _draw_bitmap_text(text: String, pos: Vector2, height: float, modulate: Color = Color.WHITE) -> void:
-	var cursor := pos
-	for raw_char in text.to_upper():
-		var character := String(raw_char)
-		if character == " ":
-			cursor.x += height * 0.55
-			continue
-		var source := _font_region(character)
-		if source.size == Vector2.ZERO:
-			cursor.x += height * 0.45
-			continue
-		var width := height * source.size.x / source.size.y
-		_draw_tex(font_tex, source, Rect2(cursor, Vector2(width, height)), modulate)
-		cursor.x += width + height * 0.08
+	if not custom_font:
+		return
+	var font_size := int(height)
+	var baseline_pos := pos + Vector2(0, custom_font.get_ascent(font_size))
+	canvas.draw_string(custom_font, baseline_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, modulate)
 
 
 func _bitmap_text_size(text: String, height: float) -> Vector2:
-	var width := 0.0
-	for raw_char in text.to_upper():
-		var character := String(raw_char)
-		if character == " ":
-			width += height * 0.55
-			continue
-		var source := _font_region(character)
-		width += (height * source.size.x / source.size.y) + height * 0.08 if source.size != Vector2.ZERO else height * 0.45
-	return Vector2(width, height)
-
-
-func _font_region(character: String) -> Rect2:
-	var alphabet_1 := "ABCDEFGHIJKLMNÑOPQRS"
-	var idx := alphabet_1.find(character)
-	if idx >= 0:
-		return Rect2(26 + idx * 74, 380, 62, 78)
-	var alphabet_2 := "TUVWXYZ"
-	idx = alphabet_2.find(character)
-	if idx >= 0:
-		return Rect2(448 + idx * 76, 482, 62, 78)
-	var digits := "0123456789"
-	idx = digits.find(character)
-	if idx >= 0:
-		return Rect2(324 + idx * 77, 586, 62, 78)
-	match character:
-		"!":
-			return Rect2(253, 686, 32, 70)
-		"?":
-			return Rect2(310, 686, 58, 70)
-		".":
-			return Rect2(394, 720, 30, 36)
-		",":
-			return Rect2(468, 720, 30, 40)
-		":":
-			return Rect2(522, 686, 28, 70)
-		"-":
-			return Rect2(684, 708, 55, 28)
-		_:
-			return Rect2()
+	if not custom_font:
+		return Vector2.ZERO
+	return custom_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, int(height))
